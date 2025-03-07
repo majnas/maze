@@ -1,2 +1,4 @@
-python-dotenv
-duckduckgo_search
+python-dotenv==1.0.1
+langchain-openai==0.3.7
+langchain==0.3.20
+langchain-community==0.3.19
