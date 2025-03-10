@@ -17,7 +17,7 @@ class MazeVisualizer:
         self.ax.set_aspect('equal')  # Ensure square cells.
         self.ax.tick_params(which="both", bottom=False, left=False, labelbottom=False, labelleft=False)
 
-    def display_maze(self, path=None):
+    def display_maze(self, path=None, filename='maze.png'):
         """Update and display the maze with an optional path."""
         # Clear the previous content.
         self.ax.cla()
@@ -50,6 +50,9 @@ class MazeVisualizer:
 
         # Update the display.
         plt.pause(0.1)
+
+        # Save the figure as a PNG file.
+        self.fig.savefig(filename, bbox_inches='tight')
 
     def close(self):
         """Close the figure when done."""

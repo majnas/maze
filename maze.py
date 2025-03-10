@@ -1,6 +1,6 @@
 import random
 from typing import Optional
-
+from icecream import ic
 class Maze:
     def __init__(self, grid_size: int = 4, num_obstacles: Optional[int] = None):
         self.grid_size = grid_size
@@ -15,7 +15,7 @@ class Maze:
     def add_obstacles(self, obstacles):
         # Place obstacles on the grid.
         for (x, y) in obstacles:
-            self.grid[x][y] = 1
+            self.grid[y][x] = 1
 
     def add_random_obstacles(self, num_obstacles):
         # Add random obstacles to the grid.
@@ -28,8 +28,8 @@ class Maze:
             y = random.randint(0, self.grid_size - 1)
             if x == 0 and y == 0:
                 continue
-            if self.grid[x][y] == 0:  # Only add an obstacle if the cell is empty.
-                self.grid[x][y] = 1
+            if self.grid[y][x] == 0:  # Only add an obstacle if the cell is empty.
+                self.grid[y][x] = 1
                 count += 1
 
 if __name__ == "__main__":

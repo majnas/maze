@@ -1,79 +1,70 @@
-# agent.py
-from langchain_openai import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
-from visualization import display_maze
+# agent_tools.py
+from langchain.tools import tool
+import json
+from icecream import ic
 
-class AIAgent:
-    def __init__(self, maze, sensor):
-        self.maze = maze
-        self.sensor = sensor
-        self.llm = ChatOpenAI(model="gpt-4o-mini")  # Initialize LLM
-        self.path = [(0, 0)]  # Track the agent's path with starting position
+def create_move_tool(maze):
+    @tool
+    def move_tool(input: str) -> dict:
+        """
+        Moves the agent in the maze.
 
-    def navigate(self):
-        position = (0, 0)  # Starting position
+        The input should be a JSON string with the following keys:
+            - current_position: string (e.g., "0,0")
+            - direction: one of "up", "down", "left", or "right"
+            - steps: integer number of steps to move
 
-        while position != (self.maze.grid_size - 1, self.maze.grid_size - 1):
-            sensor_readings = self.get_sensor_readings(position)
-            direction, steps = self.get_direction_and_steps(sensor_readings)
-
-            if direction in ['up', 'down', 'left', 'right']:
-                # Limit steps to the maximum possible (distance - 1)
-                max_steps = sensor_readings[direction] - 1
-                steps = min(steps, max_steps)
-                if steps <= 0:
-                    print("No valid steps in the chosen direction.")
-                    continue
-
-                # Define movement delta
-                delta = {
-                    'up': (-1, 0),
-                    'down': (1, 0),
-                    'left': (0, -1),
-                    'right': (0, 1)
-                }[direction]
-
-                # Move step-by-step
-                for _ in range(steps):
-                    new_position = (position[0] + delta[0], position[1] + delta[1])
-                    if (0 <= new_position[0] < self.maze.grid_size and
-                        0 <= new_position[1] < self.maze.grid_size and
-                        self.maze.grid[new_position[0]][new_position[1]] == 0):
-                        position = new_position
-                        self.path.append(position)
-                        display_maze(self.maze, self.path)
-                        # Check if goal is reached
-                        if position == (self.maze.grid_size - 1, self.maze.grid_size - 1):
-                            break
-                    else:
-                        print("Move blocked by obstacle or boundary.")
-                        break
-            else:
-                print("Invalid direction or steps received.")
-                break  # Stop if LLM gives an invalid response
-
-        return self.path
-
-    def get_sensor_readings(self, position):
-        return {
-            'up': self.sensor.read_distance(position, (-1, 0)),
-            'down': self.sensor.read_distance(position, (1, 0)),
-            'left': self.sensor.read_distance(position, (0, -1)),
-            'right': self.sensor.read_distance(position, (0, 1))
+        Returns a dictionary with:
+            - new_position: a string representing the final position after moving
+            - intermediate_positions: a list of positions (as strings) visited along the way
+            - blocked_position: (optional) a string representing the first cell that was blocked, if any.
+        """
+        params = json.loads(input)
+        current_position = params.get("current_position")
+        direction = params.get("direction")
+        steps = int(params.get("steps", 1))
+        
+        x, y = map(int, current_position.split(","))
+        direction_map = {
+            'up': (0, 1),
+            'down': (0, -1),
+            'left': (-1, 0),
+            'right': (1, 0)
         }
+        delta = direction_map.get(direction, (0, 0))
+        intermediate_positions = []
+        blocked_position = None
 
-    def get_direction_and_steps(self, sensor_readings):
-        """Ask LLM for direction and number of steps based on sensor readings"""
-        messages = [
-            SystemMessage(content="You are a robot navigating a 4x4 maze to reach the bottom-right corner (3,3). You can move up, down, left, or right. Obstacles block movement."),
-            HumanMessage(content=f"Sensor readings: {sensor_readings}. Each value is the number of cells until an obstacle or boundary. Choose a direction and how many steps to move (1 to sensor reading - 1). Respond with 'direction steps', e.g., 'right 2'.")
-        ]
-        response = self.llm.invoke(messages)
-        try:
-            parts = response.content.strip().lower().split()
-            direction, steps = parts[0], int(parts[1])
-            if direction in ['up', 'down', 'left', 'right'] and steps > 0:
-                return direction, steps
-        except Exception:
-            pass
-        return None, 0  # Return invalid move if parsing fails
+        # Try moving one step at a time.
+        for i in range(steps):
+            candidate = (x + delta[0], y + delta[1])
+            # Check if candidate is within bounds and is free.
+            if (0 <= candidate[0] < maze.grid_size and
+                0 <= candidate[1] < maze.grid_size and
+                maze.grid[candidate[1]][candidate[0]] == 0):
+                x, y = candidate
+                intermediate_positions.append(f"{x},{y}")
+            else:
+                blocked_position = candidate
+                break
+        new_position = f"{x},{y}"
+        ret = {"new_position": new_position, "intermediate_positions": intermediate_positions}
+        if blocked_position is not None:
+            ret["blocked_position"] = f"{blocked_position[0]},{blocked_position[1]}"
+        return ret
+    return move_tool
+
+def create_sensor_tool(sensor):
+    @tool
+    def sensor_tool(input: str) -> dict:
+        """
+        Returns sensor readings from the current position.
+
+        The input should be a string representing the current position (e.g., "0,0").
+
+        Returns a dictionary with sensor readings in all four directions.
+        """
+        pos = tuple(map(int, input.split(",")))
+        readings = sensor.read_all_directions(pos)
+        return readings
+    return sensor_tool
