@@ -29,7 +29,7 @@ def main(args):
     tools_descriptions = toolbox.get_tools_descriptions
 
     # Initialize the Chat Model.
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    llm = ChatOpenAI(model="gpt-3.5-turbo")
 
     
     current_position = "0,0"
@@ -47,15 +47,12 @@ def main(args):
     user_prompt = (
             f"You are a robot in a {args.grid_size}x{args.grid_size} maze with obstacles. "
             f"Your goal is to reach {target} starting from 0,0. "
-            f"You are currently at {current_position}. "
-            f"Use the available tools: 'sensor_tool' to get sensor readings and 'move_tool' to move. "
-            f"When calling move_tool, provide a JSON string with keys: "
-            f"'current_position' (e.g., '0,0'), 'direction' (one of 'up', 'down', 'left', 'right'), and 'steps' (an integer). "
-            f"Return a dictionary with: 'output' (latest valid position in 'x,y' format), "
-            f"'intermediate_positions' (list of all positions visited in this step), "
-            f"and 'blocked_position' (list of newly identified blocked positions in 'x,y' format, or empty if none). "
-            f"Make progress toward {target} in each step, using sensor readings to avoid obstacles. "
-            f"When's the next flight from Amsterdam to New York?"
+            f"You are currently at {current_position}"
+            f"Make progress toward {target} in each step, using provided tools to avoid obstacles. "
+            f"Take your time and break down the problem to solve it."
+            f"botom-left is 0,0 position and top-right is {args.grid_size},{args.grid_size} position."
+            f"No furture movement is needed when current_position is {args.grid_size},{args.grid_size}."
+            f"I am ready to tell me which tool should I call at first step."
     )
     messages = [HumanMessage(content=user_prompt)]
 
@@ -85,50 +82,30 @@ def main(args):
         ic(response)
 
         function_call = response.additional_kwargs.get("function_call")
-        function_name = function_call["name"]
-        arguments = json.loads(function_call["arguments"])
-        result = toolbox.get_tools_dict[function_name](**arguments)
-        content = toolbox.get_tools_call_content[function_name](function_result=result)
-        ic(result)
-                
-        messages.append(AIMessage(content=content))
+        if function_call:
+            ic(function_call)
+            function_name = function_call["name"]
+            arguments = json.loads(function_call["arguments"])
+            result = toolbox.get_tools_dict[function_name](**arguments)
+            new_messages = toolbox.get_tools_call_content_dict[function_name](**dict(function_result=result))
+            ic(function_name, arguments, result, new_messages)
+            messages.extend(new_messages)
+            if function_name == 'move_tool':
+                current_position = result.get('new_position', current_position)
+                ic(result, current_position)
+                path.append(current_position)
+        else:
+            break
 
-        step += 1
-        
-        # result = {'input': "You are a robot in a 4x4 maze with obstacles. Your goal is to reach 3,3 starting from 0,0. You are currently at 0,0. Your movement history is: 0,0. Cells that led to a blocked path: None. Use the available tools: 'sensor_tool' to get sensor readings and 'move_tool' to move. When calling move_tool, provide a JSON string with keys: 'current_position' (e.g., '0,0'), 'direction' (one of 'up', 'down', 'left', 'right'), and 'steps' (an integer). Return the final position in your response in the format 'x,y'. Do not choose a move that leads to a position that has already been visited or known to be blocked.", 'output': '3,1'}
-        # # Expect the agent to return a new position in the format "x,y".
-        # match = re.search(r'(\d+,\d+)', result)
-        # if match:
-        #     new_position = match.group(1)
-        #     ic(new_position)
-        #     QQ
-        #     # If the agent did not move, try to mark the attempted cell as blocked.
-        #     if new_position == current_position:
-        #         print("Agent is stuck! No valid move was made.")
-        #         # Here, you might choose to mark a direction as blocked (if you had that info).
-        #         break
-        #     current_position = new_position
-        #     path.append(current_position)
-            
-        #     # If the move tool returned a blocked cell, update our blocked matrix.
-        #     if "blocked_position" in result:
-        #         # Try to extract the blocked cell from the agent output.
-        #         blocked_match = re.search(r'blocked_position.*?(\d+,\d+)', result)
-        #         if blocked_match:
-        #             bp = blocked_match.group(1)
-        #             bx, by = map(int, bp.split(","))
-        #             if 0 <= bx < args.grid_size and 0 <= by < args.grid_size:
-        #                 blocked_matrix[bx][by] = 1
-            
-        #     # Update visualization.
-        #     display_maze(maze, [tuple(map(int, pos.split(","))) for pos in path])
-        #     visualizer.display_maze([tuple(map(int, current_position.split(",")))])
 
-        #     time.sleep(1)
-        # else:
-        #     print("Failed to parse agent result. Exiting.")
-        #     break
+        visualizer.display_maze([tuple(map(int, current_position.split(",")))])
+        time.sleep(1)
 
+        step += 1        
+
+    print("----------------------------------------------------------")
+    for msg in messages:
+        ic(msg.content)
     print("Final Path:", path)
 
 if __name__ == "__main__":
